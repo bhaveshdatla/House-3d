@@ -104,9 +104,9 @@ canvas{display:block;touch-action:none}
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/* ============ BASICS (all plan units in feet; x = left→right, z = road(0)→back(70)) ============ */
+/* ============ BASICS (plan units in feet; x = left→right, z = road(0)→back(70)) ============ */
 const $ = s => document.querySelector(s);
-const LH = 10, WH = 9.5, T = 0.75;             // floor-to-floor, wall height, wall thickness
+const LH = 10, WH = 9.5, T = 0.75;
 const W3 = (x, y, z) => new THREE.Vector3(x - 17, y, 35 - z);
 const FLOORS = ['Ground floor', '1st floor', 'Roof'];
 
@@ -241,23 +241,31 @@ function flight(x0, x1, z1, z2, y0, grp) {
   flight(24.6, 30.8, 17.9, 22.2, b, g);
   box(30.8, 33.25, 13.3, 22.2, b + 4.5, b + 5, WALL.conn, g);
   flight(30.8, 24.6, 13.3, 17.5, b + 5, g);
-  box(24.6, 30.8, 17.5, 17.9, b, b + WH, WALL.conn, g, true);   // central wall
+  box(24.6, 30.8, 17.5, 17.9, b, b + WH, WALL.conn, g, true);
 });
-box(24.6, 33.25, 13.3, 17.5, 0, 4, WALL.new, levels[0], true);  // under-stair store
+box(24.6, 33.25, 13.3, 17.5, 0, 4, WALL.new, levels[0], true);
 box(30.8, 33.25, 17.5, 22.2, 0, 4, WALL.new, levels[0], true);
 
 /* ============ SLABS ============ */
 const SLAB = M(0xdcd6cb), TERR = M(0xcbbfa9);
 const HOUSE = [[17.4, 24.6, 0, 57.4], [21.5, 24.6, 57.4, 70], [24.6, 34, 0, 13.3], [24.6, 34, 22.2, 70]];
+const OLD = [0, 17.4, 0, 57.4];
 HOUSE.forEach(r => box(...r, 9.5, 10, SLAB, levels[1]));
-box(0, 17.4, 0, 57.4, 9.5, 10, TERR, levels[1]);
+box(...OLD, 9.5, 10, SLAB, levels[1]);                 // 1st floor slab over old house
 HOUSE.forEach(r => box(...r, 19.5, 20, TERR, levels[2]));
+box(...OLD, 19.5, 20, TERR, levels[2]);                // roof slab over old house
 box(24, 34, 12.7, 22.8, 28, 28.5, M(0xbdb2a0), levels[2]);
 
-/* ============ 1st FLOOR (concept, stacked on GF walls) ============ */
+/* ============ 1st FLOOR (concept) – over BOTH houses ============ */
+// over old house: Rooms 6–10 on the same wall lines as Rooms 1–5
+wall(0.4, 0.4, 0.4, 57, 1, 'ff', [[4, 8, 'h'], [17, 21, 'h'], [30, 34, 'h'], [40, 44, 'h'], [49, 53, 'h']]);
+wall(0.4, 0.4, 17.8, 0.4, 1, 'ff', [[3, 8, 'w'], [11, 15, 'w']]);
+wall(17.8, 0.4, 17.8, 57, 1, 'ff', [[4, 7, 'd'], [13.4, 16.4, 'd'], [28, 31, 'd'], [38.2, 41.2, 'd'], [47.2, 50.2, 'd']]);
+[11.8, 27.3, 37.4, 46.4].forEach(z => wall(0.4, z, 17.8, z, 1, 'ff'));
+wall(0.4, 57, 17.8, 57, 1, 'ff', [[5, 10, 'w']]);
+// over new house
 wall(33.6, 0.4, 33.6, 69.6, 1, 'ff', [[4, 9, 'w'], [30.5, 35.5, 'w'], [42.5, 46.5, 'w'], [54, 60, 'w'], [66.3, 68.3, 'h']]);
 wall(17.8, 0.4, 33.6, 0.4, 1, 'ff', [[20, 23, 'w'], [26, 31, 'w']]);
-wall(17.8, 0.4, 17.8, 57, 1, 'ff', [[4, 9, 'w'], [30.5, 33.5, 'd'], [43, 47, 'w']]);
 wall(17.8, 57, 21.9, 57, 1, 'ff', [[18.6, 21.1, 'w']]);
 wall(21.9, 50.2, 21.9, 69.6, 1, 'ff', [[50.8, 53.6, 'd'], [59, 63, 'w'], [66.5, 68.5, 'h']]);
 wall(21.9, 69.6, 33.6, 69.6, 1, 'ff', [[26, 29, 'h']]);
@@ -268,20 +276,17 @@ wall(22, 26.8, 22, 39.4, 1, 'ff', [[27.4, 30.2, 'd']]);
 wall(22, 26.8, 33.6, 26.8, 1, 'ff');
 wall(24.1, 22.4, 24.1, 26.8, 1, 'ff', [[23.1, 25.9, 'd']]);
 wall(24.1, 22.4, 33.6, 22.4, 1, 'ff');
-wall(17.8, 13.1, 33.6, 13.1, 1, 'ff', [[19.6, 22.6, 'd']]);
-wall(0.4, 0.4, 0.4, 57, 1, 'ff', [], { h: 3.5 });            // terrace parapets
-wall(0.4, 0.4, 17.8, 0.4, 1, 'ff', [], { h: 3.5 });
-wall(0.4, 57, 17.8, 57, 1, 'ff', [], { h: 3.5 });
+wall(24.4, 13.1, 33.6, 13.1, 1, 'ff');                 // stair wall; front hall stays open to passage
 
-/* ============ ROOF ============ */
-[[17.8, 0.4, 17.8, 57], [17.8, 57, 21.9, 57], [21.9, 57, 21.9, 69.6], [21.9, 69.6, 33.6, 69.6], [33.6, 0.4, 33.6, 69.6], [17.8, 0.4, 33.6, 0.4]]
+/* ============ ROOF – parapet around both houses ============ */
+[[0.4, 0.4, 0.4, 57], [0.4, 57, 21.9, 57], [21.9, 57, 21.9, 69.6], [21.9, 69.6, 33.6, 69.6], [33.6, 0.4, 33.6, 69.6], [0.4, 0.4, 33.6, 0.4]]
   .forEach(w => wall(...w, 2, 'ff', [], { h: 3.5 }));
 wall(24.4, 13.1, 24.4, 22.4, 2, 'conn', [[13.5, 17.3, 'd']], { h: 8 });
 wall(24.4, 13.1, 33.6, 13.1, 2, 'conn', [], { h: 8 });
 wall(24.4, 22.4, 33.6, 22.4, 2, 'conn', [], { h: 8 });
 wall(33.6, 13.1, 33.6, 22.4, 2, 'conn', [], { h: 8 });
 
-/* ============ ROOMS (data drives floors, labels, room list, Vastu) ============ */
+/* ============ ROOMS ============ */
 const C = { room: 0xd8d1c4, liv: 0xeee7da, bed: 0xe6dccb, kit: 0xf0eadf, bath: 0xcfe3ea, pass: 0xe4ddcf };
 const ROOMS = [
   { n: 'Living Room', s: "15'3\" × 12'3\"", t: 'living', l: 0, r: [17.8, 33.6, 0.4, 13.1], c: C.liv },
@@ -300,20 +305,24 @@ const ROOMS = [
   { n: 'Room-3', s: "≈16'8\" × 9'4\"", t: 'room', l: 0, r: [0.4, 17.8, 27.3, 37.4], c: C.room },
   { n: 'Room-4', s: "≈16'8\" × 8'3\"", t: 'room', l: 0, r: [0.4, 17.8, 37.4, 46.4], c: C.room },
   { n: 'Room-5', s: "≈16'8\" × 9'9\"", t: 'room', l: 0, r: [0.4, 17.8, 46.4, 57], c: C.room },
-  // 1st floor – concept
-  { n: 'Bedroom-3', s: "≈15'3\" × 12'3\" · concept", t: 'bedroom', l: 1, r: [17.8, 33.6, 0.4, 13.1], c: C.bed },
+  // 1st floor – concept (over both houses)
+  { n: 'Front Hall', s: "≈15'3\" × 12'3\" · concept", t: 'living', l: 1, r: [17.8, 33.6, 0.4, 13.1], c: C.liv },
   { n: 'Staircase', s: 'to roof', t: 'stair', l: 1, r: [24.4, 33.6, 13.1, 22.4], jp: [23, 20], floor: false },
   { n: '1F Passage', s: "6'6\" / 4'0\"", t: 'pass', l: 1, r: [17.8, 24.4, 13.1, 26.8], c: C.pass },
   { n: '', t: 'pass', l: 1, r: [17.8, 22, 26.8, 39.4], c: C.pass, list: false, label: false },
   { n: '', t: 'pass', l: 1, r: [17.8, 21.9, 50.2, 57], c: C.pass, list: false, label: false },
-  { n: 'Bath-3', s: "≈9'0\" × 3'9\" · concept", t: 'toilet', l: 1, r: [24.1, 33.6, 22.4, 26.8], c: C.bath },
-  { n: 'Bedroom-4', s: "≈10'9\" × 12'3\" · concept", t: 'bedroom', l: 1, r: [22, 33.6, 26.8, 39.4], c: C.bed },
+  { n: '1F Common Bath', s: "≈9'0\" × 3'9\" · concept", t: 'toilet', l: 1, r: [24.1, 33.6, 22.4, 26.8], c: C.bath },
+  { n: 'Bedroom-3', s: "≈10'9\" × 12'3\" · concept", t: 'bedroom', l: 1, r: [22, 33.6, 26.8, 39.4], c: C.bed },
   { n: 'Family Lounge', s: "≈15'3\" × 10'6\" · concept", t: 'living', l: 1, r: [17.8, 33.6, 39.4, 50.2], c: C.liv, lp: [27.5, 44.5] },
-  { n: 'Bedroom-5', s: "≈11'0\" × 14'3\" · concept", t: 'bedroom', l: 1, r: [21.9, 33.6, 50.2, 65], c: C.bed },
-  { n: 'Bath-5', s: "≈11'0\" × 4'0\" · concept", t: 'toilet', l: 1, r: [21.9, 33.6, 65, 69.6], c: C.bath },
-  { n: 'Open Terrace', s: 'over Rooms 1–5', t: 'open', l: 1, r: [0.4, 17.8, 0.4, 57], floor: false },
+  { n: 'Bedroom-4', s: "≈11'0\" × 14'3\" · concept", t: 'bedroom', l: 1, r: [21.9, 33.6, 50.2, 65], c: C.bed },
+  { n: '1F Attached Bath', s: "≈11'0\" × 4'0\" · concept", t: 'toilet', l: 1, r: [21.9, 33.6, 65, 69.6], c: C.bath },
+  { n: 'Room-6', s: "≈16'8\" × 10'8\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 0.4, 11.8], c: C.room },
+  { n: 'Room-7', s: "≈16'8\" × 14'9\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 11.8, 27.3], c: C.room },
+  { n: 'Room-8', s: "≈16'8\" × 9'4\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 27.3, 37.4], c: C.room },
+  { n: 'Room-9', s: "≈16'8\" × 8'3\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 37.4, 46.4], c: C.room },
+  { n: 'Room-10', s: "≈16'8\" × 9'9\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 46.4, 57], c: C.room },
   // roof
-  { n: 'Roof Terrace', s: 'parapet 3\'6"', t: 'open', l: 2, r: [17.8, 33.6, 0.4, 69.6], floor: false, lp: [27, 45], jp: [21, 40] },
+  { n: 'Roof Terrace', s: 'over both houses', t: 'open', l: 2, r: [0.4, 33.6, 0.4, 57], floor: false, lp: [10, 30], jp: [10, 30] },
   { n: 'Stair Cabin', s: 'mumty + water tank', t: 'stair', l: 2, r: [24.4, 33.6, 13.1, 22.4], floor: false, jp: [22, 15] },
 ];
 function deckTex(d) {
@@ -364,7 +373,7 @@ function sofa(l, x1, x2, z1, z2, back) {
   if (back === 'N' || back === 'S') { F(l, x1, x1 + .5, z1, z2, .3, 2.1, FC.fab); F(l, x2 - .5, x2, z1, z2, .3, 2.1, FC.fab); }
   else { F(l, x1, x2, z1, z1 + .5, .3, 2.1, FC.fab); F(l, x1, x2, z2 - .5, z2, .3, 2.1, FC.fab); }
 }
-function bedroomSet(l, z0, master) { // z0 = south wall of bedroom
+function bedroomSet(l, z0, master) {
   F(l, 25.6, 33.2, z0 + .4, z0 + 2.2, 0, 7, FC.wood);
   bed(l, 26.6, 33.2, z0 + 3.6, z0 + 9.6, 'E');
   if (master) F(l, 22.4, 23.2, z0 + 5.3, z0 + 10.8, 0, 2.6, FC.wood);
@@ -373,6 +382,8 @@ function bathSet(l, top) {
   if (top) { F(l, 31.4, 32.8, 67.3, 69.2, 0, 1.4, FC.porc); F(l, 31.4, 32.8, 68.6, 69.2, 1.4, 2.8, FC.porc); F(l, 22.4, 24, 68.2, 69.2, 2.4, 2.8, FC.porc); }
   else { F(l, 31.4, 33.2, 23.2, 24.6, 0, 1.4, FC.porc); F(l, 32.6, 33.2, 23.2, 24.6, 1.4, 2.8, FC.porc); F(l, 24.6, 25.6, 25, 26.3, 2.4, 2.8, FC.porc); }
 }
+const ROWS = [[0.4, 11.8], [11.8, 27.3], [27.3, 37.4], [37.4, 46.4], [46.4, 57]];
+function rentalRooms(l) { ROWS.forEach(([, z2]) => { bed(l, 1.2, 7.7, z2 - 4.4, z2 - 1.2, 'W'); F(l, 14, 16.8, z2 - 2.6, z2 - 1, 0, 2.5, FC.wood); }); }
 // Ground floor
 F(0, 18.25, 19, 4, 10, 0, 1.6, FC.wood); F(0, 18.3, 18.5, 5, 9, 3, 5.8, FC.black);
 sofa(0, 24.8, 30.2, 1, 3.6, 'S'); sofa(0, 24.8, 30.2, 10.2, 12.6, 'N'); sofa(0, 30.8, 33.1, 4.2, 9.6, 'E');
@@ -384,17 +395,17 @@ F(0, 30.8, 33.2, 41, 47.9, 0, 2.75, FC.white); F(0, 30.8, 33.2, 41, 47.9, 2.75, 
 F(0, 23.6, 25.8, 48.2, 49.6, 2.95, 3.02, FC.black); F(0, 31.4, 32.9, 43, 45, 2.95, 3, FC.steel);
 F(0, 22.4, 24.8, 39.9, 41.8, 0, 6, FC.steel);
 bathSet(0, true); bathSet(0, false);
-[[0.4, 11.8], [11.8, 27.3], [27.3, 37.4], [37.4, 46.4], [46.4, 57]].forEach(([, z2]) => {
-  bed(0, 1.2, 7.7, z2 - 4.4, z2 - 1.2, 'W'); F(0, 14, 16.8, z2 - 2.6, z2 - 1, 0, 2.5, FC.wood);
-});
+rentalRooms(0);
 plant(0, 2, 59); plant(0, 2, 68); plant(0, 19.6, 68);
 // 1st floor (concept)
-F(1, 24.6, 33.2, 11.2, 12.6, 0, 7, FC.wood); bed(1, 26.6, 33.2, 3.6, 9.6, 'E');
+sofa(1, 25, 31, 1, 3.6, 'S'); sofa(1, 31.2, 33.2, 4.2, 10, 'E');
+cyl(1, 28, 7, 1.4, 1.1, 1.3, FC.wood); cyl(1, 28, 7, .25, 0, 1.1, FC.wood); plant(1, 32.6, 1.4);
 bedroomSet(1, 26.8, false); bedroomSet(1, 50.2, true); bathSet(1, true); bathSet(1, false);
 sofa(1, 24, 30, 40.2, 42.6, 'S'); sofa(1, 31, 33.2, 42.6, 48, 'E'); cyl(1, 27, 45.5, 1.4, 1.1, 1.3, FC.wood); cyl(1, 27, 45.5, .25, 0, 1.1, FC.wood);
-plant(1, 2.2, 2.2); plant(1, 15.6, 2.2); plant(1, 2.2, 55); plant(1, 15.6, 55);
+rentalRooms(1);
 // roof
 cyl(2, 29, 17.7, 2.3, 8.5, 13, M(0x2b2f33), levels[2]);
+plant(2, 2.2, 2.2); plant(2, 2.2, 55); plant(2, 15.6, 2.2); plant(2, 31.8, 68);
 
 /* ============ VASTU ============ */
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -441,7 +452,6 @@ function buildVastu() {
     s.position.copy(W3(cw * (c + .5) + (c - 1) * cw * .28, .7, cd * (r + .5) + (r - 1) * cd * .32 + (c === 1 && r === 1 ? 6 : 0))); vastuG.add(s);
   }
 }
-// 3D north arrow
 const compass3d = new THREE.Group(); scene.add(compass3d);
 { const red = new THREE.MeshStandardMaterial({ color: 0xe53935 }), g1 = new THREE.CylinderGeometry(.25, .25, 6, 12); g1.rotateX(Math.PI / 2);
   const g2 = new THREE.ConeGeometry(.9, 2.2, 20); g2.rotateX(Math.PI / 2);
@@ -468,7 +478,7 @@ function renderRooms() {
       const v = r.t === 'pass' ? null : vastuOf(r);
       h += `<button class="ri" data-i="${i}"><span class="dot ${v ? v.st : ''}"></span><b>${r.n}</b><small>${r.s || ''}</small></button>`; });
   });
-  h += `<p class="note">Click a room to jump into it (in Walk view you are placed inside it). Sizes with ≈ are scaled from the drawing – only written dimensions are to be followed. The 1st floor and roof are a concept stacked on the ground-floor walls until those drawings are ready.</p>`;
+  h += `<p class="note">Click a room to jump into it (in Walk view you are placed inside it). Sizes with ≈ are scaled from the drawing – only written dimensions are to be followed. The 1st floor (over both the old and new house) and the roof are a concept until those drawings are ready.</p>`;
   $('#tabRooms').innerHTML = h;
 }
 function renderVastu() {
@@ -569,7 +579,7 @@ function surfaces(x, z) {
   if (x > -6 && x < 40 && z > -14 && z < 76) s.push(0); else return s;
   const stair = x > 24.6 && x < 33.6 && z > 13.2 && z < 22.2;
   if (!stair && (inR(x, z, 17.4, 34, 0, 57.4) || inR(x, z, 21.5, 34, 57.4, 70))) s.push(10, 20);
-  if (inR(x, z, 0, 17.4, 0, 57.4)) s.push(10);
+  if (inR(x, z, 0, 17.4, 0, 57.4)) s.push(10, 20);     // 1st floor + roof over old house
   if (stair) for (const b of [0, 10]) {
     if (x > 30.8) s.push(b + 5);
     else if (z >= 17.7) s.push(b + 5 * (x - 24.6) / 6.2);

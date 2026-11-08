@@ -104,11 +104,12 @@ canvas{display:block;touch-action:none}
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/* ============ BASICS (plan units in feet; x = left→right, z = road(0)→back(70)) ============ */
+/* ============ BASICS (plan units in feet; x = left→right, z = house front(0)→back(70); front setback is negative z) ============ */
 const $ = s => document.querySelector(s);
 const LH = 10, WH = 9.5, T = 0.75;
 const W3 = (x, y, z) => new THREE.Vector3(x - 17, y, 35 - z);
 const FLOORS = ['Ground floor', '1st floor', 'Roof'];
+const ORBIT_HOME = { p: [52, 56, 118], t: [0, 6, 14] };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -117,15 +118,16 @@ $('#app').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 
 const persp = new THREE.PerspectiveCamera(55, 1, 0.1, 3000);
-persp.position.set(48, 62, 92);
+persp.position.set(...ORBIT_HOME.p);
 const ortho = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
-ortho.position.set(0, 300, 0.01);
+ortho.position.set(0, 300, 8.01);
 let camera = persp;
 
 const orbit = new OrbitControls(persp, renderer.domElement);
-orbit.target.set(0, 3, 2); orbit.enableDamping = true; orbit.maxPolarAngle = Math.PI * 0.49;
-orbit.minDistance = 6; orbit.maxDistance = 320;
+orbit.target.set(...ORBIT_HOME.t); orbit.enableDamping = true; orbit.maxPolarAngle = Math.PI * 0.49;
+orbit.minDistance = 6; orbit.maxDistance = 340;
 const topCtl = new OrbitControls(ortho, renderer.domElement);
+topCtl.target.set(0, 0, 8);
 topCtl.enableRotate = false; topCtl.screenSpacePanning = true; topCtl.enableDamping = true;
 topCtl.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 topCtl.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -134,8 +136,8 @@ topCtl.minZoom = 0.5; topCtl.maxZoom = 8; topCtl.enabled = false;
 const hemi = new THREE.HemisphereLight(0xffffff, 0x8c7b66, 1.1); scene.add(hemi);
 scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
-sun.position.set(-45, 90, 60); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 300 });
+sun.position.set(-45, 90, 70); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 320 });
 sun.shadow.camera.updateProjectionMatrix(); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun);
 
@@ -146,8 +148,9 @@ ground.rotation.x = -Math.PI / 2; ground.position.y = -0.06; ground.receiveShado
 /* ============ HELPERS ============ */
 const _m = {};
 function M(c, o) { const k = c + (o ? JSON.stringify(o) : ''); return _m[k] || (_m[k] = new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .85 }, o || {}))); }
-const WALL = { existing: M(0xc49a6c), new: M(0xf4f1ea), ff: M(0x8fa3b8), conn: M(0xe8873a) };
-const GLASS = new THREE.MeshStandardMaterial({ color: 0x9fd3ee, transparent: true, opacity: .35, roughness: .1 });
+const WALL = { existing: M(0xc49a6c), new: M(0xf4f1ea), ff: M(0x8fa3b8), conn: M(0xe8873a), site: M(0x8a8178) };
+const FRAME = M(0x3b4046, { roughness: .6 }), WOOD = M(0xa0703f, { roughness: .7 }), DECK = M(0xa77d55);
+const GLASS = new THREE.MeshStandardMaterial({ color: 0x8ec5e0, transparent: true, opacity: .32, roughness: .08, metalness: .1 });
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const solids = [];
 
@@ -179,11 +182,19 @@ function wall(a, b, c, d, lvl, type, ops = [], o = {}) {
     seg(cur, p0, 0, h);
     const [lo, hi] = k === 'd' ? [0, 7] : k === 'h' ? [6, 8] : [3, 7];
     seg(p0, p1, 0, lo); seg(p0, p1, hi, h);
-    if (k !== 'd') hz ? box(p0, p1, fixed - .05, fixed + .05, base + lo, base + hi, GLASS, g, false, false)
-                      : box(fixed - .05, fixed + .05, p0, p1, base + lo, base + hi, GLASS, g, false, false);
+    if (k !== 'd' && hi <= h) hz ? box(p0, p1, fixed - .05, fixed + .05, base + lo, base + hi, GLASS, g, false, false)
+                                 : box(fixed - .05, fixed + .05, p0, p1, base + lo, base + hi, GLASS, g, false, false);
     cur = p1;
   }
   seg(cur, s1, 0, h);
+}
+// glass railing with charcoal top rail
+function rail(a, b, c, d, lvl, h = 3.4) {
+  const base = lvl * LH, g = levels[lvl], hz = Math.abs(b - d) < 1e-6;
+  if (hz) { const x1 = Math.min(a, c), x2 = Math.max(a, c);
+    box(x1, x2, b - .05, b + .05, base, base + h, GLASS, g, true, false); box(x1, x2, b - .12, b + .12, base + h, base + h + .18, FRAME, g); }
+  else { const z1 = Math.min(b, d), z2 = Math.max(b, d);
+    box(a - .05, a + .05, z1, z2, base, base + h, GLASS, g, true, false); box(a - .12, a + .12, z1, z2, base + h, base + h + .18, FRAME, g); }
 }
 function fit(g, t, w, px) { do { g.font = `${w} ${px}px system-ui,"Segoe UI",Roboto,sans-serif`; px -= 2; } while (g.measureText(t).width > 480 && px > 14); }
 function makeLabel(t, s, accent) {
@@ -199,16 +210,41 @@ function makeLabel(t, s, accent) {
   sp.scale.set(6.5, 6.5 * c.height / 512, 1); sp.renderOrder = 20; return sp;
 }
 
-/* ============ SITE ============ */
-box(0, 34, -7, -4.6, -0.06, 0, M(0xc4bcae), siteG, false, false);
-box(0, 34, -4.6, -2.3, -0.06, 0.005, M(0xcfc8bb), siteG, false, false);
-box(0, 34, -2.3, 0, -0.06, 0.01, M(0xd8d2c6), siteG, false, false);
-box(-80, 114, -30, -8, -0.06, -0.03, M(0x4b4f55), siteG, false, false);
-for (let x = -76; x < 110; x += 9) box(x, x + 4.5, -19.2, -18.8, -0.03, -0.02, M(0xf2f2f2), siteG, false, false);
-const roadLbl = makeLabel('MAIN ROAD'); roadLbl.material.depthTest = true; roadLbl.position.copy(W3(17, 1.5, -14)); siteG.add(roadLbl);
+/* ============ SITE: road, 16' front setback with garden, otla, parking ============ */
+const STONE = M(0xcfc6b5), PAVER = M(0xa3a29c), LAWN = M(0x79a957), FOOT = M(0xbdb8ae), LEAF = M(0x4f8a3e), LEAF2 = M(0x5f9e48);
+box(-80, 114, -44, -17, -0.06, -0.03, M(0x4b4f55), siteG, false, false);                 // road
+for (let x = -76; x < 110; x += 9) box(x, x + 4.5, -30.7, -30.3, -0.03, -0.02, M(0xf2f2f2), siteG, false, false);
+box(-80, 114, -17, -16, -0.06, 0.04, FOOT, siteG, false, false);                           // footpath
+box(0, 17.8, -6, 0, -0.06, 0.03, STONE, siteG, false, false);                               // otla (old house)
+box(0, 17.8, -16, -6, -0.06, 0.0, LAWN, siteG, false, false);                               // lawn
+box(12.6, 15.8, -16, -6, -0.06, 0.035, STONE, siteG, false, false);                         // garden path
+box(17.8, 22.4, -16, 0, -0.06, 0.035, STONE, siteG, false, false);                          // walkway to main entry
+box(22.4, 34, -16, 0, -0.06, 0.03, PAVER, siteG, false, false);                             // driveway / parking
+for (let z = -15; z < 0; z += 3) box(22.4, 34, z, z + 0.08, 0.03, 0.04, M(0x8d8c86), siteG, false, false);
+const roadLbl = makeLabel('MAIN ROAD'); roadLbl.material.depthTest = true; roadLbl.position.copy(W3(17, 1.5, -24)); siteG.add(roadLbl);
+// compound wall with three gates
+const SG = levels[0];
+wall(0.3, -16, 33.7, -16, 0, 'site', [[12.6, 15.8, 'd'], [18.6, 22.2, 'd'], [22.6, 33.2, 'd']], { h: 3.5, t: .6 });
+wall(0.3, -16, 0.3, 0, 0, 'site', [], { h: 3.5, t: .6 });
+wall(33.7, -16, 33.7, 0, 0, 'site', [], { h: 3.5, t: .6 });
+[12, 16.4, 18, 22.4, 33.7].forEach(x => { box(x - .6, x + .6, -16.6, -15.4, 0, 5, FRAME, SG, true); box(x - .35, x + .35, -16.35, -15.65, 5, 5.4, M(0xfff3c4, { emissive: 0x6b5a20 }), SG); });
+box(0.6, 11.6, -15.4, -14.6, 0, 2.4, LEAF, siteG);                                           // hedge
+box(0.6, 1.4, -14.6, -6.4, 0, 2.4, LEAF, siteG);
+box(2, 7, -4.4, -3.2, 0, 1.5, WOOD, siteG);                                                  // otla bench
+function tree(x, z, s = 1) {
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(.35 * s, .45 * s, 7 * s, 10), M(0x6b4a2b)); tr.position.copy(W3(x, 3.5 * s, z)); tr.castShadow = true; siteG.add(tr);
+  [[0, 8.5, 0, 3.2], [1.4, 7.4, .8, 2.4], [-1.3, 7.6, -.6, 2.3]].forEach(([dx, y, dz, r]) => {
+    const f = new THREE.Mesh(new THREE.SphereGeometry(r * s, 18, 14), y > 8 ? LEAF2 : LEAF); f.position.copy(W3(x + dx, y * s, z + dz)); f.castShadow = true; siteG.add(f); });
+  solids.push({ x1: x - .5, x2: x + .5, z1: z - .5, z2: z + .5, y1: 0, y2: 7 * s });
+}
+tree(4, -10.5); tree(9.5, -13, .85);
+// parked car
+{ const carM = M(0x8b1e2b, { metalness: .4, roughness: .35 }), tint = M(0x1d2733, { roughness: .2 });
+  box(24.6, 30.4, -14.4, -1.8, .8, 3.1, carM, siteG, true); box(25.1, 29.9, -11, -4.6, 3.1, 4.7, tint, siteG, true);
+  for (const x of [24.75, 30.25]) for (const z of [-12.4, -3.8]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, .7, 20), M(0x111111)); w.rotation.z = Math.PI / 2; w.position.copy(W3(x, 1.15, z)); w.castShadow = true; siteG.add(w); } }
 
 /* ============ GROUND FLOOR WALLS (from drawing) ============ */
-// existing block: Rooms 1–5 + boundary
 wall(0.4, 0.4, 0.4, 57, 0, 'existing');
 wall(0.4, 0.4, 17.8, 0.4, 0, 'existing', [[3, 8, 'w'], [13.6, 16.6, 'd']]);
 // only Room-2 and Room-5 open into the new house; old-house rooms connect to each other inside
@@ -217,9 +253,10 @@ wall(17.8, 0.4, 17.8, 57, 0, 'existing', [[13.4, 16.4, 'd'], [47.2, 50.2, 'd']])
 wall(0.4, 57, 17.8, 57, 0, 'existing', [[13.6, 16.6, 'd']]);
 wall(0.4, 57, 0.4, 69.6, 0, 'existing', [], { h: 6 });
 wall(0.4, 69.6, 21.9, 69.6, 0, 'existing', [], { h: 6 });
-// new house (right side)
+// new house
 wall(17.8, 57, 21.9, 57, 0, 'new', [[18.5, 21.3, 'd']]);
-wall(17.8, 0.4, 33.6, 0.4, 0, 'new', [[19.5, 22.7, 'd'], [26, 31, 'w']]);
+wall(17.8, 0.4, 33.6, 0.4, 0, 'new', [[19.5, 22.7, 'd'], [25.8, 32.6, 'w']]);
+for (let x = 23.1; x < 25.5; x += .32) box(x, x + .18, -.2, .03, .2, 9.4, WOOD, levels[0]);   // wood-slat cladding at entry
 wall(33.6, 0.4, 33.6, 69.6, 0, 'new', [[4, 9, 'w'], [30.5, 35.5, 'w'], [42.5, 46.5, 'w'], [54, 60, 'w'], [66.3, 68.3, 'h']]);
 wall(21.9, 69.6, 33.6, 69.6, 0, 'new', [[26, 29, 'h']]);
 wall(21.9, 50.2, 21.9, 69.6, 0, 'new', [[50.8, 53.6, 'd'], [59, 63, 'w'], [66.5, 68.5, 'h']]);
@@ -250,42 +287,56 @@ box(30.8, 33.25, 17.5, 22.2, 0, 4, WALL.new, levels[0], true);
 /* ============ SLABS ============ */
 const SLAB = M(0xdcd6cb), TERR = M(0xcbbfa9);
 const HOUSE = [[17.4, 24.6, 0, 57.4], [21.5, 24.6, 57.4, 70], [24.6, 34, 0, 13.3], [24.6, 34, 22.2, 70]];
-const OLD = [0, 17.4, 0, 57.4];
 HOUSE.forEach(r => box(...r, 9.5, 10, SLAB, levels[1]));
-box(...OLD, 9.5, 10, SLAB, levels[1]);                 // 1st floor slab over old house
-HOUSE.forEach(r => box(...r, 19.5, 20, TERR, levels[2]));
-box(...OLD, 19.5, 20, TERR, levels[2]);                // roof slab over old house
+box(0, 17.4, 0, 57.4, 9.5, 10, SLAB, levels[1]);
+const FF_ROOF = [[0, 24.6, 0, 50.4], [24.6, 34, 0, 13.3], [24.6, 34, 22.2, 50.4]];
+FF_ROOF.forEach(r => box(...r, 19.5, 20, TERR, levels[2]));
 box(24, 34, 12.7, 22.8, 28, 28.5, M(0xbdb2a0), levels[2]);
 
-/* ============ 1st FLOOR (concept) – over BOTH houses ============ */
-// over old house: Rooms 6–10 on the same wall lines as Rooms 1–5 (same door pattern as below)
-wall(0.4, 0.4, 0.4, 57, 1, 'ff', [[4, 8, 'h'], [17, 21, 'h'], [30, 34, 'h'], [40, 44, 'h'], [49, 53, 'h']]);
-wall(0.4, 0.4, 17.8, 0.4, 1, 'ff', [[3, 8, 'w'], [11, 15, 'w']]);
-wall(17.8, 0.4, 17.8, 57, 1, 'ff', [[13.4, 16.4, 'd'], [47.2, 50.2, 'd']]);
-[11.8, 27.3, 37.4, 46.4].forEach(z => wall(0.4, z, 17.8, z, 1, 'ff', [[10.5, 13.5, 'd']]));
-wall(0.4, 57, 17.8, 57, 1, 'ff', [[5, 10, 'w']]);
-// over new house
-wall(33.6, 0.4, 33.6, 69.6, 1, 'ff', [[4, 9, 'w'], [30.5, 35.5, 'w'], [42.5, 46.5, 'w'], [54, 60, 'w'], [66.3, 68.3, 'h']]);
-wall(17.8, 0.4, 33.6, 0.4, 1, 'ff', [[20, 23, 'w'], [26, 31, 'w']]);
-wall(17.8, 57, 21.9, 57, 1, 'ff', [[18.6, 21.1, 'w']]);
-wall(21.9, 50.2, 21.9, 69.6, 1, 'ff', [[50.8, 53.6, 'd'], [59, 63, 'w'], [66.5, 68.5, 'h']]);
-wall(21.9, 69.6, 33.6, 69.6, 1, 'ff', [[26, 29, 'h']]);
-wall(21.9, 65, 33.6, 65, 1, 'ff', [[23.4, 26.2, 'd']]);
-wall(21.9, 50.2, 33.6, 50.2, 1, 'ff');
-wall(22, 39.4, 33.6, 39.4, 1, 'ff');
-wall(22, 26.8, 22, 39.4, 1, 'ff', [[27.4, 30.2, 'd']]);
-wall(22, 26.8, 33.6, 26.8, 1, 'ff');
-wall(24.1, 22.4, 24.1, 26.8, 1, 'ff', [[23.1, 25.9, 'd']]);
-wall(24.1, 22.4, 33.6, 22.4, 1, 'ff');
-wall(24.4, 13.1, 33.6, 13.1, 1, 'ff');                 // stair wall; front hall stays open to passage
+/* ============ MODERN FRONT: box frame + cantilever balcony ============ */
+box(0, .8, -5.6, .4, 9.5, 20.6, FRAME, levels[1], true);               // left fin
+box(33.2, 34, -5.6, .4, 9.5, 20.6, FRAME, levels[1], true);            // right fin
+box(0, 34, -5.6, .4, 19.5, 20.6, FRAME, levels[2]);                     // roof overhang
+box(0, 34, -5.6, -5.2, 9, 10, FRAME, levels[1]);                        // balcony fascia
+box(.8, 33.2, -5.2, 0, 9.5, 10, DECK, levels[1]);                       // balcony deck
+rail(.8, -5.2, 33.2, -5.2, 1);
+for (let z = -5.1; z < .2; z += .45) box(17.55, 18.05, z, z + .16, 10, 19.5, WOOD, levels[1]); // wood louvre screen
+solids.push({ x1: 17.55, x2: 18.05, z1: -5.2, z2: .4, y1: 10, y2: 19.5 });
 
-/* ============ ROOF – parapet around both houses ============ */
-[[0.4, 0.4, 0.4, 57], [0.4, 57, 21.9, 57], [21.9, 57, 21.9, 69.6], [21.9, 69.6, 33.6, 69.6], [33.6, 0.4, 33.6, 69.6], [0.4, 0.4, 33.6, 0.4]]
-  .forEach(w => wall(...w, 2, 'ff', [], { h: 3.5 }));
+/* ============ 1st FLOOR: 3BHK within 34' × 50' (no kitchen) ============ */
+wall(0.4, 0.4, 0.4, 50, 1, 'ff', [[4, 10, 'w'], [18, 20.5, 'h'], [27, 33, 'w'], [41, 46, 'w']]);
+wall(0.4, 0.4, 33.6, 0.4, 1, 'ff', [[3, 9, 'd'], [11, 15, 'w'], [20, 27, 'd'], [28.5, 32.5, 'w']]);
+wall(33.6, 0.4, 33.6, 50, 1, 'ff', [[3.5, 9.5, 'w'], [23.3, 25.6, 'h'], [30.5, 35.5, 'w'], [40.5, 43, 'h'], [46, 48.5, 'h']]);
+wall(0.4, 50, 33.6, 50, 1, 'ff', [[4, 7, 'd'], [9, 14, 'w'], [18.4, 21.4, 'd'], [27, 31, 'w']]);
+wall(17.8, 0.4, 17.8, 50, 1, 'ff', [[13.4, 16.2, 'd'], [24, 26.8, 'd'], [38.5, 41.3, 'd']]);
+wall(0.4, 16.5, 17.8, 16.5, 1, 'ff', [[3, 5.8, 'd'], [12, 15, 'd']]);
+wall(9, 16.5, 9, 23, 1, 'ff');
+wall(0.4, 23, 17.8, 23, 1, 'ff');
+wall(0.4, 37.4, 17.8, 37.4, 1, 'ff');
+wall(24.4, 13.1, 33.6, 13.1, 1, 'ff');
+wall(24.1, 22.4, 33.6, 22.4, 1, 'ff');
+wall(24.1, 22.4, 24.1, 26.8, 1, 'ff', [[23.1, 25.9, 'd']]);
+wall(22, 26.8, 33.6, 26.8, 1, 'ff');
+wall(22, 26.8, 22, 50, 1, 'ff', [[27.4, 30.2, 'd'], [45, 47.8, 'd']]);
+wall(22, 39.4, 33.6, 39.4, 1, 'ff', [[30, 32.8, 'd']]);
+wall(22, 44, 33.6, 44, 1, 'ff');
+// rear terrace on ground-floor roof
+rail(0.4, 50, 0.4, 57, 1); rail(0.4, 57, 21.9, 57, 1); rail(21.9, 57, 21.9, 69.6, 1);
+rail(21.9, 69.6, 33.6, 69.6, 1); rail(33.6, 50, 33.6, 69.6, 1);
+
+/* ============ ROOF ============ */
+rail(0.4, 0.4, 0.4, 50, 2); rail(0.4, 50, 33.6, 50, 2); rail(33.6, 0.4, 33.6, 50, 2); rail(0.4, 0.4, 24, 0.4, 2);
 wall(24.4, 13.1, 24.4, 22.4, 2, 'conn', [[13.5, 17.3, 'd']], { h: 8 });
 wall(24.4, 13.1, 33.6, 13.1, 2, 'conn', [], { h: 8 });
 wall(24.4, 22.4, 33.6, 22.4, 2, 'conn', [], { h: 8 });
 wall(33.6, 13.1, 33.6, 22.4, 2, 'conn', [], { h: 8 });
+// pergola
+[[2, 3], [14, 3], [2, 12], [14, 12]].forEach(([x, z]) => box(x - .25, x + .25, z - .25, z + .25, 20, 28, FRAME, levels[2], true));
+box(1.7, 14.3, 2.7, 3.3, 27.4, 28, FRAME, levels[2]); box(1.7, 14.3, 11.7, 12.3, 27.4, 28, FRAME, levels[2]);
+for (let x = 2.2; x < 14; x += 1) box(x, x + .25, 2.6, 12.4, 28, 28.35, WOOD, levels[2]);
+// solar panels
+const SOLAR = M(0x1e3557, { roughness: .3, metalness: .3 });
+[32, 38, 44].forEach(z => { box(2.2, 15.8, z + 1, z + 2.6, 20, 21.2, FRAME, levels[2], true); box(2, 16, z, z + 3.6, 21.2, 21.4, SOLAR, levels[2]); });
 
 /* ============ ROOMS ============ */
 const C = { room: 0xd8d1c4, liv: 0xeee7da, bed: 0xe6dccb, kit: 0xf0eadf, bath: 0xcfe3ea, pass: 0xe4ddcf };
@@ -306,24 +357,26 @@ const ROOMS = [
   { n: 'Room-3', s: "≈16'8\" × 9'4\"", t: 'room', l: 0, r: [0.4, 17.8, 27.3, 37.4], c: C.room },
   { n: 'Room-4 (Kitchen)', s: "≈16'8\" × 8'3\"", t: 'kitchen', l: 0, r: [0.4, 17.8, 37.4, 46.4], c: C.kit },
   { n: 'Room-5', s: "≈16'8\" × 9'9\"", t: 'room', l: 0, r: [0.4, 17.8, 46.4, 57], c: C.room },
-  // 1st floor – concept (over both houses)
-  { n: 'Front Hall', s: "≈15'3\" × 12'3\" · concept", t: 'living', l: 1, r: [17.8, 33.6, 0.4, 13.1], c: C.liv },
+  { n: 'Front Garden & Otla', s: "16' setback · old house", t: 'open', l: 0, r: [0.4, 17.8, -16, 0], floor: false, jp: [14, -10] },
+  { n: 'Parking & Entry Walk', s: "16' setback · new house", t: 'open', l: 0, r: [17.8, 33.6, -16, 0], floor: false, jp: [20.4, -10], lp: [20.4, -10] },
+  // 1st floor – 3BHK concept (34' × 50', no kitchen)
+  { n: 'Master Bedroom', s: "≈16'8\" × 15'4\" · balcony", t: 'master', l: 1, r: [0.4, 17.8, 0.4, 16.5], c: C.bed, jp: [9, 5] },
+  { n: 'Master Bath', s: "≈7'10\" × 5'9\"", t: 'toilet', l: 1, r: [0.4, 9, 16.5, 23], c: C.bath },
+  { n: 'Walk-in Wardrobe', s: "≈8'0\" × 5'9\"", t: 'dress', l: 1, r: [9, 17.8, 16.5, 23], c: C.bed },
+  { n: 'Bedroom-2 (1F)', s: "≈16'8\" × 13'8\"", t: 'bedroom', l: 1, r: [0.4, 17.8, 23, 37.4], c: C.bed },
+  { n: 'Study / TV Room', s: "≈16'8\" × 11'10\"", t: 'living', l: 1, r: [0.4, 17.8, 37.4, 50], c: C.liv },
+  { n: 'Living Room (1F)', s: "≈15'1\" × 12'0\" · balcony", t: 'living', l: 1, r: [17.8, 33.6, 0.4, 13.1], c: C.liv },
   { n: 'Staircase', s: 'to roof', t: 'stair', l: 1, r: [24.4, 33.6, 13.1, 22.4], jp: [23, 20], floor: false },
-  { n: '1F Passage', s: "6'6\" / 4'0\"", t: 'pass', l: 1, r: [17.8, 24.4, 13.1, 26.8], c: C.pass },
-  { n: '', t: 'pass', l: 1, r: [17.8, 22, 26.8, 39.4], c: C.pass, list: false, label: false },
-  { n: '', t: 'pass', l: 1, r: [17.8, 21.9, 50.2, 57], c: C.pass, list: false, label: false },
-  { n: '1F Common Bath', s: "≈9'0\" × 3'9\" · concept", t: 'toilet', l: 1, r: [24.1, 33.6, 22.4, 26.8], c: C.bath },
-  { n: 'Bedroom-3', s: "≈10'9\" × 12'3\" · concept", t: 'bedroom', l: 1, r: [22, 33.6, 26.8, 39.4], c: C.bed },
-  { n: 'Family Lounge', s: "≈15'3\" × 10'6\" · concept", t: 'living', l: 1, r: [17.8, 33.6, 39.4, 50.2], c: C.liv, lp: [27.5, 44.5] },
-  { n: 'Bedroom-4', s: "≈11'0\" × 14'3\" · concept", t: 'bedroom', l: 1, r: [21.9, 33.6, 50.2, 65], c: C.bed },
-  { n: '1F Attached Bath', s: "≈11'0\" × 4'0\" · concept", t: 'toilet', l: 1, r: [21.9, 33.6, 65, 69.6], c: C.bath },
-  { n: 'Room-6', s: "≈16'8\" × 10'8\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 0.4, 11.8], c: C.room },
-  { n: 'Room-7', s: "≈16'8\" × 14'9\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 11.8, 27.3], c: C.room },
-  { n: 'Room-8', s: "≈16'8\" × 9'4\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 27.3, 37.4], c: C.room },
-  { n: 'Room-9', s: "≈16'8\" × 8'3\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 37.4, 46.4], c: C.room },
-  { n: 'Room-10', s: "≈16'8\" × 9'9\" · concept", t: 'room', l: 1, r: [0.4, 17.8, 46.4, 57], c: C.room },
+  { n: 'Lobby', s: 'stair arrival', t: 'pass', l: 1, r: [17.8, 24.1, 13.1, 26.8], c: C.pass },
+  { n: 'Corridor', s: "3'6\" clear", t: 'pass', l: 1, r: [17.8, 22, 26.8, 50], c: C.pass, lp: [19.9, 44] },
+  { n: 'Common Bath', s: "≈9'0\" × 3'9\"", t: 'toilet', l: 1, r: [24.1, 33.6, 22.4, 26.8], c: C.bath },
+  { n: 'Bedroom-3 (1F)', s: "≈10'10\" × 11'10\" · attached", t: 'bedroom', l: 1, r: [22, 33.6, 26.8, 39.4], c: C.bed },
+  { n: 'Bath-3', s: "≈11'0\" × 3'10\"", t: 'toilet', l: 1, r: [22, 33.6, 39.4, 44], c: C.bath },
+  { n: 'Utility / Store', s: "≈11'0\" × 5'3\"", t: 'util', l: 1, r: [22, 33.6, 44, 50], c: C.pass },
+  { n: 'Front Balcony', s: "33' × 5' cantilever", t: 'open', l: 1, r: [0.8, 33.2, -5.2, 0.4], floor: false, lp: [9, -2.6], jp: [10, -2.6] },
+  { n: 'Rear Terrace', s: 'on ground-floor roof', t: 'open', l: 1, r: [0.4, 33.6, 50, 57], floor: false },
   // roof
-  { n: 'Roof Terrace', s: 'over both houses', t: 'open', l: 2, r: [0.4, 33.6, 0.4, 57], floor: false, lp: [10, 30], jp: [10, 30] },
+  { n: 'Roof Terrace', s: 'pergola + solar', t: 'open', l: 2, r: [0.4, 33.6, 0.4, 50], floor: false, lp: [8, 20], jp: [10, 22] },
   { n: 'Stair Cabin', s: 'mumty + water tank', t: 'stair', l: 2, r: [24.4, 33.6, 13.1, 22.4], floor: false, jp: [22, 15] },
 ];
 function deckTex(d) {
@@ -346,7 +399,7 @@ ROOMS.forEach(r => {
 
 /* ============ FURNITURE ============ */
 const FC = { wood: M(0x9a7552), fab: M(0x6f86a6), bed: M(0xeee6d6), pil: M(0xffffff), top: M(0x4f555c), white: M(0xf6f5f1),
-  plant: M(0x4d9a4a), pot: M(0xb4652a), steel: M(0xb9c0c7), black: M(0x1b1d20), porc: M(0xfbfbfb) };
+  plant: M(0x4d9a4a), pot: M(0xb4652a), steel: M(0xb9c0c7), black: M(0x1b1d20), porc: M(0xfbfbfb), planter: M(0x5a5f66) };
 const F = (l, x1, x2, z1, z2, y1, y2, m) => box(x1, x2, z1, z2, l * LH + y1, l * LH + y2, m, furn[l]);
 function cyl(l, x, z, r, y1, y2, m, grp = furn[l]) {
   const me = new THREE.Mesh(new THREE.CylinderGeometry(r, r, y2 - y1, 24), m);
@@ -366,11 +419,18 @@ function bed(l, x1, x2, z1, z2, head) {
   else F(l, ...px, z1 + .35, z2 - .35, 2, 2.45, FC.pil);
   F(l, E ? x1 + .1 : x2 - 2.4, E ? x1 + 2.4 : x2 - .1, z1 + .05, z2 - .05, 2, 2.15, FC.fab);
 }
+function bedN(l, x1, x2, z1, z2) { // headboard on the back (z2) side
+  F(l, x1, x2, z1, z2, 0, 1.3, FC.wood); F(l, x1 + .1, x2 - .1, z1 + .1, z2 - .1, 1.3, 2, FC.bed);
+  F(l, x1 - .3, x2 + .3, z2 - .35, z2, 0, 4, FC.wood);
+  const m = (x1 + x2) / 2; F(l, x1 + .35, m - .15, z2 - 1.9, z2 - .5, 2, 2.45, FC.pil); F(l, m + .15, x2 - .35, z2 - 1.9, z2 - .5, 2, 2.45, FC.pil);
+  F(l, x1 + .05, x2 - .05, z1 + .1, z1 + 2.4, 2, 2.15, FC.fab);
+}
 function sofa(l, x1, x2, z1, z2, back) {
   F(l, x1, x2, z1, z2, .3, 1.4, FC.fab); const t = .6;
   if (back === 'S') F(l, x1, x2, z1, z1 + t, .3, 2.8, FC.fab);
   if (back === 'N') F(l, x1, x2, z2 - t, z2, .3, 2.8, FC.fab);
   if (back === 'E') F(l, x2 - t, x2, z1, z2, .3, 2.8, FC.fab);
+  if (back === 'W') F(l, x1, x1 + t, z1, z2, .3, 2.8, FC.fab);
   if (back === 'N' || back === 'S') { F(l, x1, x1 + .5, z1, z2, .3, 2.1, FC.fab); F(l, x2 - .5, x2, z1, z2, .3, 2.1, FC.fab); }
   else { F(l, x1, x2, z1, z1 + .5, .3, 2.1, FC.fab); F(l, x1, x2, z2 - .5, z2, .3, 2.1, FC.fab); }
 }
@@ -385,13 +445,12 @@ function bathSet(l, top) {
 }
 const ROWS = [[0.4, 11.8], [11.8, 27.3], [27.3, 37.4], [37.4, 46.4], [46.4, 57]];
 function rentalRooms(l, skip = []) { ROWS.forEach(([, z2], i) => { if (skip.includes(i)) return; bed(l, 1.2, 7.7, z2 - 4.4, z2 - 1.2, 'W'); F(l, 14, 16.8, z2 - 2.6, z2 - 1, 0, 2.5, FC.wood); }); }
-function oldKitchen() { // Room-4 of the old house
-  F(0, 0.8, 2.8, 37.9, 46, 0, 2.75, FC.white); F(0, 0.8, 2.8, 37.9, 46, 2.75, 2.95, FC.top);   // counter, left wall
-  F(0, 2.8, 10, 44.1, 46, 0, 2.75, FC.white); F(0, 2.8, 10, 44.1, 46, 2.75, 2.95, FC.top);    // counter, back wall
-  F(0, 4, 6.2, 44.4, 45.8, 2.95, 3.02, FC.black);                                              // hob
-  F(0, 1, 2.6, 40, 42, 2.95, 3, FC.steel);                                                     // sink
-  F(0, 14.2, 16.6, 44, 45.9, 0, 6, FC.steel);                                                  // fridge
-  F(0, 7, 11, 39.6, 42, 2.3, 2.5, FC.wood); F(0, 8.7, 9.3, 40.5, 41.1, 0, 2.3, FC.wood);       // small dining table
+function oldKitchen() {
+  F(0, 0.8, 2.8, 37.9, 46, 0, 2.75, FC.white); F(0, 0.8, 2.8, 37.9, 46, 2.75, 2.95, FC.top);
+  F(0, 2.8, 10, 44.1, 46, 0, 2.75, FC.white); F(0, 2.8, 10, 44.1, 46, 2.75, 2.95, FC.top);
+  F(0, 4, 6.2, 44.4, 45.8, 2.95, 3.02, FC.black); F(0, 1, 2.6, 40, 42, 2.95, 3, FC.steel);
+  F(0, 14.2, 16.6, 44, 45.9, 0, 6, FC.steel);
+  F(0, 7, 11, 39.6, 42, 2.3, 2.5, FC.wood); F(0, 8.7, 9.3, 40.5, 41.1, 0, 2.3, FC.wood);
 }
 // Ground floor
 F(0, 18.25, 19, 4, 10, 0, 1.6, FC.wood); F(0, 18.3, 18.5, 5, 9, 3, 5.8, FC.black);
@@ -406,15 +465,36 @@ F(0, 22.4, 24.8, 39.9, 41.8, 0, 6, FC.steel);
 bathSet(0, true); bathSet(0, false);
 rentalRooms(0, [3]); oldKitchen();
 plant(0, 2, 59); plant(0, 2, 68); plant(0, 19.6, 68);
-// 1st floor (concept)
-sofa(1, 25, 31, 1, 3.6, 'S'); sofa(1, 31.2, 33.2, 4.2, 10, 'E');
-cyl(1, 28, 7, 1.4, 1.1, 1.3, FC.wood); cyl(1, 28, 7, .25, 0, 1.1, FC.wood); plant(1, 32.6, 1.4);
-bedroomSet(1, 26.8, false); bedroomSet(1, 50.2, true); bathSet(1, true); bathSet(1, false);
-sofa(1, 24, 30, 40.2, 42.6, 'S'); sofa(1, 31, 33.2, 42.6, 48, 'E'); cyl(1, 27, 45.5, 1.4, 1.1, 1.3, FC.wood); cyl(1, 27, 45.5, .25, 0, 1.1, FC.wood);
-rentalRooms(1);
+plant(0, 17, -1.2); plant(0, 1.4, -1.2);                                         // otla planters
+// 1st floor – master suite
+bedN(1, 6.2, 11.6, 9.6, 16.1); F(1, 4.9, 5.9, 14.6, 16, 0, 2, FC.wood);
+F(1, 13, 15.6, 2.4, 4.8, .3, 1.5, FC.fab); F(1, 13, 15.6, 4.2, 4.8, .3, 3, FC.fab);   // lounge chair
+F(1, 1, 2.6, 20.8, 22.6, 0, 1.4, FC.porc); F(1, 1, 2.6, 22, 22.6, 1.4, 2.8, FC.porc);
+F(1, 5, 8.5, 21.9, 22.6, 2.4, 2.8, FC.porc); box(.8, 4, 19.45, 19.55, 10, 17, GLASS, furn[1], false, false);
+F(1, 15.8, 17.4, 17, 22.6, 0, 7.5, FC.wood); F(1, 9.5, 15.5, 21, 22.6, 0, 7.5, FC.wood);
+// bedroom-2
+bed(1, .8, 7.3, 27, 33, 'W'); F(1, 8, 16, 35.6, 37, 0, 7, FC.wood);
+F(1, 14.5, 17.2, 28.5, 32.5, 2.4, 2.6, FC.wood); F(1, 14.7, 15, 28.7, 32.3, 0, 2.4, FC.wood);
+// study / TV
+F(1, .8, 1.6, 41, 47, 0, 1.6, FC.wood); F(1, .8, 1, 42, 46, 3, 5.8, FC.black);
+sofa(1, 8.8, 11.4, 40.5, 47.5, 'E'); F(1, 2, 8, 37.8, 39.4, 0, 7, FC.wood);
+// living
+F(1, 18.2, 19, 4, 10, 0, 1.6, FC.wood); F(1, 18.3, 18.5, 5, 9, 3, 5.8, FC.black);
+sofa(1, 24.8, 30.8, 10.4, 12.7, 'N'); sofa(1, 31.2, 33.2, 3.5, 9.5, 'E');
+cyl(1, 27.5, 6.5, 1.4, 1.1, 1.3, FC.wood); cyl(1, 27.5, 6.5, .25, 0, 1.1, FC.wood); plant(1, 32.6, 1.4);
+// bedroom-3 + baths + utility
+bedroomSet(1, 26.8, false); bathSet(1, false);
+F(1, 22.6, 24.2, 41.6, 43.6, 0, 1.4, FC.porc); F(1, 22.6, 24.2, 43, 43.6, 1.4, 2.8, FC.porc); F(1, 27, 29, 43, 43.6, 2.4, 2.8, FC.porc);
+F(1, 31, 33.2, 47.5, 49.6, 0, 3, FC.steel); F(1, 22.5, 23.5, 45, 49.5, 0, 6, FC.wood);
+// balcony + terraces
+[[1.2, 8], [9.5, 16.5], [19.5, 24], [26, 32.8]].forEach(([a, b]) => { F(1, a, b, -5.05, -4.25, 0, 1.4, FC.planter); F(1, a + .1, b - .1, -5, -4.3, 1.4, 2.4, FC.plant); });
+F(1, 10.4, 12.2, -3.4, -1.4, .3, 1.4, FC.fab); F(1, 13.2, 15, -3.4, -1.4, .3, 1.4, FC.fab); cyl(1, 12.7, -.9, .7, 0, 1.8, FC.wood);
+F(1, 28, 32, -3.6, -1.4, .3, 1.4, FC.fab);
+plant(1, 2.2, 55); plant(1, 15.6, 55); plant(1, 31.8, 68); plant(1, 31.8, 52);
 // roof
 cyl(2, 29, 17.7, 2.3, 8.5, 13, M(0x2b2f33), levels[2]);
-plant(2, 2.2, 2.2); plant(2, 2.2, 55); plant(2, 15.6, 2.2); plant(2, 31.8, 68);
+sofa(2, 4, 10, 5, 7.4, 'S'); cyl(2, 7, 9.5, 1.1, 1, 1.2, FC.wood); cyl(2, 7, 9.5, .2, 0, 1, FC.wood);
+plant(2, 2.2, 48); plant(2, 31.8, 48); plant(2, 16, 2.2);
 
 /* ============ VASTU ============ */
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -436,7 +516,7 @@ const RULES = {
   kitchen: { g: ['SE'], o: ['NW', 'E'], tip: 'Kitchen is ideal in the South-East (Agni); North-West is the accepted alternative. Cook facing East.', fix: 'Put the hob in the kitchen\'s SE corner so the cook faces East; keep stove and sink apart.' },
   toilet: { g: ['NW', 'W'], o: ['S', 'SE', 'E'], tip: 'Toilets and baths are preferred in the North-West or West. Avoid North-East, South-West and the centre.', fix: 'Keep the WC on a North–South axis, door closed, strong exhaust; a bowl of sea-salt is a common remedy.' },
   stair: { g: ['S', 'W', 'SW'], o: ['SE', 'NW'], tip: 'Staircase is best in the South, West or South-West. This stair turns clockwise going up ✓.', fix: 'In N/NE keep it light: no store or toilet under it, well lit; never in the exact centre.' },
-  open: { g: ['N', 'E', 'NE'], o: ['NW', 'SE'], tip: 'Open spaces (yard, terrace) are best to the North, East or North-East; the South-West should be the heavier, higher side.', fix: 'Add weight in SW – a raised planter, store or water-tank stand – and keep NE lower and open.' },
+  open: { g: ['N', 'E', 'NE'], o: ['NW', 'SE'], tip: 'Open spaces (garden, balcony, terrace) are best to the North, East or North-East; the South-West should be the heavier, higher side.', fix: 'Add weight in SW – a raised planter, store or water-tank stand – and keep NE lower and open.' },
   entry: { g: ['N', 'NE', 'E'], o: ['NW', 'W', 'SE'], tip: 'Main entrance is most auspicious on the North, East or North-East side.', fix: 'Keep a raised threshold, good lighting and a clean approach; consult a Vastu expert for S / SW entrances.' },
 };
 const ENTRY = { n: 'Main entrance', t: 'entry', l: 0, r: [19.5, 22.7, 0, 1], c0: [21.1, 0.5] };
@@ -466,12 +546,12 @@ const compass3d = new THREE.Group(); scene.add(compass3d);
   const g2 = new THREE.ConeGeometry(.9, 2.2, 20); g2.rotateX(Math.PI / 2);
   compass3d.add(new THREE.Mesh(g1, M(0x555555))); const cone = new THREE.Mesh(g2, red); cone.position.z = 4.1; compass3d.add(cone);
   const n = makeLabel('N'); n.scale.set(2.6, .5, 1); n.position.set(0, 1.2, 6.4); compass3d.add(n);
-  compass3d.position.copy(W3(39, .4, -5)); }
+  compass3d.position.copy(W3(40, .4, -10)); }
 function updateNorth() { const [px, pz] = northPlan(); compass3d.rotation.y = Math.atan2(px, -pz); $('#roadTxt').textContent = 'Road: ' + facing; }
 
 /* ============ UI ============ */
 let mode = 'orbit', floor = 0, showLabels = true, showFurn = true, showVastu = false;
-const P = { x: 21, z: -5, y: 0, ey: 0, yaw: 0, pitch: -0.05, init: false };
+const P = { x: 20.4, z: -19, y: 0, ey: 0, yaw: 0, pitch: -0.05, init: false };
 const curLevel = () => mode === 'walk' ? (P.y < 7 ? 0 : P.y < 17 ? 1 : 2) : floor;
 function applyVis() {
   const lv = curLevel();
@@ -482,16 +562,16 @@ const syncFloorButtons = f => document.querySelectorAll('#gFloor button').forEac
 function renderRooms() {
   let h = '';
   [0, 1, 2].forEach(l => {
-    h += `<h4>${FLOORS[l]}${l ? ' · concept' : ' · from drawing'}</h4>`;
+    h += `<h4>${FLOORS[l]}${l === 1 ? ' · 3BHK concept' : l ? ' · concept' : ' · from drawing'}</h4>`;
     ROOMS.forEach((r, i) => { if (r.l !== l || r.list === false || !r.n) return;
-      const v = r.t === 'pass' ? null : vastuOf(r);
+      const v = RULES[r.t] ? vastuOf(r) : null;
       h += `<button class="ri" data-i="${i}"><span class="dot ${v ? v.st : ''}"></span><b>${r.n}</b><small>${r.s || ''}</small></button>`; });
   });
-  h += `<p class="note">Click a room to jump into it (in Walk view you are placed inside it). In the old house only Room-2 and Room-5 open into the new house; Rooms 1–5 connect to each other through inside doors (Room-1 also has its front door). Sizes with ≈ are scaled from the drawing – only written dimensions are to be followed. The 1st floor (over both houses) and roof are a concept until those drawings are ready.</p>`;
+  h += `<p class="note">Click a room to jump into it (in Walk view you are placed inside it). The ground floor is from the drawing, plus a 16' front setback with garden, otla and parking. In the old house only Room-2 and Room-5 open into the new house. The 1st floor is a 3BHK concept within 34' × 50' (no kitchen) with a cantilevered front balcony and a rear terrace. Sizes with ≈ are approximate – only written dimensions are to be followed.</p>`;
   $('#tabRooms').innerHTML = h;
 }
 function renderVastu() {
-  const items = ROOMS.filter(r => r.n && r.t !== 'pass').concat([ENTRY]);
+  const items = ROOMS.filter(r => r.n && RULES[r.t]).concat([ENTRY]);
   const res = items.map(r => ({ r, ...vastuOf(r) }));
   const cnt = s => res.filter(x => x.st === s).length;
   const [cx1, cx2, cz1, cz2] = [34 / 3, 68 / 3, 70 / 3, 140 / 3];
@@ -510,7 +590,7 @@ function renderVastu() {
         <p>${R.tip}${st !== 'good' ? `<br><em>Tip: ${R.fix}</em>` : ''}</p></div>`;
     });
   });
-  h += `<p class="note">Zones use a 3×3 grid over the whole 34'×70' plot, judged by each room's centre. This is traditional guidance, not a structural or legal requirement – confirm with your architect / Vastu consultant.</p>`;
+  h += `<p class="note">Zones use a 3×3 grid over the 34'×70' plot (the front setback counts with the front row), judged by each room's centre. This is traditional guidance, not a structural or legal requirement – confirm with your architect / Vastu consultant.</p>`;
   $('#tabVastu').innerHTML = h;
 }
 function refreshVastu() { buildVastu(); updateNorth(); renderRooms(); renderVastu(); applyVis(); }
@@ -518,27 +598,26 @@ function refreshVastu() { buildVastu(); updateNorth(); renderRooms(); renderVast
 function setTheme(d) {
   document.body.classList.toggle('dark', d);
   scene.background = new THREE.Color(d ? 0x161a20 : 0xdde7ee);
-  scene.fog = new THREE.Fog(scene.background, 260, 650);
+  scene.fog = new THREE.Fog(scene.background, 280, 700);
   groundMat.color.set(d ? 0x2c3330 : 0xa9bb92);
   hemi.intensity = d ? .55 : 1.1; sun.intensity = d ? 1.2 : 2.2;
 }
 let dark = matchMedia('(prefers-color-scheme: dark)').matches; setTheme(dark);
 $('#tTheme').onclick = () => setTheme(dark = !dark);
 
-let saved = null, topInit = false;
+let saved = null;
 function teleport(x, z, y) {
   const tries = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]];
   for (const [dx, dz] of tries) if (!collide(x + dx, z + dz, y)) { x += dx; z += dz; break; }
   P.x = x; P.z = z; P.y = P.ey = y;
 }
 function setMode(m) {
-  if (m === mode && m === 'orbit') { persp.position.set(48, 62, 92); orbit.target.set(0, 3, 2); return; }
+  if (m === mode && m === 'orbit') { persp.position.set(...ORBIT_HOME.p); orbit.target.set(...ORBIT_HOME.t); return; }
   if (mode === 'walk' && m !== 'walk' && saved) { persp.position.copy(saved.p); orbit.target.copy(saved.t); }
   if (m === 'walk' && mode !== 'walk') {
     saved = { p: persp.position.clone(), t: orbit.target.clone() };
-    if (!P.init) { P.init = true; teleport(21, -5, 0); P.yaw = 0; P.pitch = -0.05; }
+    if (!P.init) { P.init = true; teleport(20.4, -19, 0); P.yaw = 0; P.pitch = -0.05; }
   }
-  if (m === 'top' && !topInit) { topInit = true; topCtl.target.set(0, 0, 0); ortho.position.set(0, 300, .01); ortho.zoom = 1; ortho.updateProjectionMatrix(); }
   if (mode === 'walk' && m !== 'walk') floor = curLevel();
   mode = m; orbit.enabled = m === 'orbit'; topCtl.enabled = m === 'top'; camera = m === 'top' ? ortho : persp;
   persp.fov = m === 'walk' ? 70 : 55; persp.updateProjectionMatrix();
@@ -551,7 +630,7 @@ function setMode(m) {
 }
 function setFloor(f) {
   floor = f;
-  if (mode === 'walk') { const S = [[21, -5], [21, 20], [21, 10]][f]; teleport(S[0], S[1], f * LH); }
+  if (mode === 'walk') { const S = [[20.4, -19], [21, 18], [10, 22]][f]; teleport(S[0], S[1], f * LH); }
   applyVis(); syncFloorButtons(f);
 }
 function jump(i) {
@@ -585,10 +664,12 @@ $('#tabRooms').onclick = e => { const b = e.target.closest('.ri'); if (b) jump(+
 const inR = (x, z, x1, x2, z1, z2) => x >= x1 && x <= x2 && z >= z1 && z <= z2;
 function surfaces(x, z) {
   const s = [];
-  if (x > -6 && x < 40 && z > -14 && z < 76) s.push(0); else return s;
+  if (x > -6 && x < 40 && z > -24 && z < 76) s.push(0); else return s;
   const stair = x > 24.6 && x < 33.6 && z > 13.2 && z < 22.2;
-  if (!stair && (inR(x, z, 17.4, 34, 0, 57.4) || inR(x, z, 21.5, 34, 57.4, 70))) s.push(10, 20);
-  if (inR(x, z, 0, 17.4, 0, 57.4)) s.push(10, 20);
+  if (!stair) {
+    if (inR(x, z, 0, 34, 0, 57.4) || inR(x, z, 21.5, 34, 57.4, 70) || inR(x, z, 0, 34, -5.2, 0)) s.push(10); // 1st floor, terraces, balcony
+    if (inR(x, z, 0, 34, 0, 50.4)) s.push(20);                                                            // roof
+  }
   if (stair) for (const b of [0, 10]) {
     if (x > 30.8) s.push(b + 5);
     else if (z >= 17.7) s.push(b + 5 * (x - 24.6) / 6.2);
@@ -660,7 +741,7 @@ function updateCompass() {
 function resize() {
   const w = innerWidth, h = innerHeight, a = w / h;
   renderer.setSize(w, h); persp.aspect = a; persp.updateProjectionMatrix();
-  const half = Math.max(42, 24 / a);
+  const half = Math.max(52, 30 / a);
   Object.assign(ortho, { left: -half * a, right: half * a, top: half, bottom: -half }); ortho.updateProjectionMatrix();
   const bh = $('#bar').offsetHeight + 16;
   if (w > 760) $('#panel').style.top = bh + 'px';
